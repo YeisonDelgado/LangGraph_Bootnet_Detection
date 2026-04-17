@@ -1,0 +1,26 @@
+# Entornos virtuales
+venv/
+env/
+.env
+
+# Archivos de python generados
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# Datos (importante evitar subir datasets pesados al repo)
+data/raw/*
+data/processed/*
+!data/raw/.gitkeep
+!data/processed/.gitkeep
+
+# IDEs
+.vscode/
+.idea/
+
+# Sistema operativo
+.DS_Store
+Thumbs.db
