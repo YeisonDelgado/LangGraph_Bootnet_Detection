@@ -222,9 +222,13 @@ notebook_content = {
  "nbformat_minor": 4
 }
 
-file_path = 'c:/Users/alexi/Documents/Proyectos2026/Software_projects/EntrenamientoModelos/LangGraph_Bootnet_Detection/notebooks/Fine_Tuned_GGUF_Ollama.ipynb'
-os.makedirs(os.path.dirname(file_path), exist_ok=True)
-with open(file_path, 'w', encoding='utf-8') as f:
+import pathlib
+
+notebook_dir = pathlib.Path(__file__).parent / "notebooks"
+notebook_dir.mkdir(parents=True, exist_ok=True)
+file_path = notebook_dir / "Fine_Tuned_GGUF_Ollama.ipynb"
+
+with file_path.open('w', encoding='utf-8') as f:
     json.dump(notebook_content, f, indent=1, ensure_ascii=False)
-    f.write('\\n')
+    f.write('\n')
 print(f"Creado: {file_path}")

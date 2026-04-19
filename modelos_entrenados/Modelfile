@@ -1,0 +1,18 @@
+FROM ./qwen2.5_botnet.gguf
+
+# Hiperparámetros base de Qwen
+PARAMETER temperature 0.1
+PARAMETER num_predict 20
+PARAMETER stop "<|im_end|>"
+PARAMETER stop "<|im_start|>"
+
+# Formato estricto para forzar ChatML en Qwen2.5
+TEMPLATE """<|im_start|>system
+{{ .System }}<|im_end|>
+<|im_start|>user
+{{ .Prompt }}<|im_end|>
+<|im_start|>assistant
+"""
+
+# Contexto de sistema
+SYSTEM """Eres un oráculo de ciberseguridad entrenado con el dataset N-BaIoT para predecir anomalías en protocolos IoT. Responde ESTRICTAMENTE con "Normal", "Mirai" o "Gafgyt". No justifiques tu respuesta."""
