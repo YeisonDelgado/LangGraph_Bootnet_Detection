@@ -10,8 +10,7 @@ Pipeline:  Extractor → Detector (SLM vía Ollama) → Firewall (Tools)
 from src.graph.state import BotnetState
 from src.models.model_loader import (
     check_ollama_health,
-    get_llm,
-    get_botnet_prompt_template
+    get_llm
 )
 from src.tools.firewall_actions import block_ip_address, log_to_siem
 
@@ -53,6 +52,8 @@ def node_extract_features(state: BotnetState) -> BotnetState:
     return state
 
 
+from langchain_core.messages import HumanMessage
+
 # ==========================================
 # NODO 2 — INFERENCIA SLM VÍA OLLAMA
 # ==========================================
@@ -64,8 +65,8 @@ def node_predict_botnet(state: BotnetState) -> BotnetState:
 
     data = state.get("network_data", [])
 
-    if len(data) < 15:
-        print(f"   ⚠️  Faltan datos de red (Recibidos {len(data)}, esperados 15).")
+    if len(data) < 14:
+        print(f"   ⚠️  Faltan datos de red (Recibidos {len(data)}, esperados 14).")
         state["prediction"] = "Error_Modelo_o_Datos"
         return state
 
@@ -74,17 +75,28 @@ def node_predict_botnet(state: BotnetState) -> BotnetState:
         return state
 
     llm = get_llm()
-    prompt_template = get_botnet_prompt_template()
-    chain = prompt_template | llm
 
-    # Preparar el payload de kwargs (f01 a f15)
-    features_dict = {f"f{str(i+1).zfill(2)}": f"{val:.4f}" for i, val in enumerate(data[:15])}
+    # Claves actualizadas de 14 final del N-BaIoT optimizado
+    FEATURES_KEYS = [
+        "MI_dir_L0.1_weight", "MI_dir_L0.1_mean", "MI_dir_L0.01_weight", 
+        "MI_dir_L0.01_mean", "H_L5_weight", "H_L1_mean", "H_L0.1_weight", 
+        "H_L0.01_weight", "H_L0.01_mean", "HH_L1_weight", "HH_L0.1_covariance", 
+        "HH_jit_L5_mean", "HH_jit_L0.1_mean", "HH_jit_L0.01_mean"
+    ]
 
-    print("   📝 Invocando el SLM vía LangChain (ChatOllama)...")
+    features_raw = {k: val for k, val in zip(FEATURES_KEYS, data[:14])}
+    features_str = '\n'.join([f'- {k}: {v:.4f}' for k, v in features_raw.items()])
+    prompt_text = f'Analiza las siguientes métricas clave de red y clasifica el tráfico:\n{features_str}'
+    
+    print("   📝 Invocando el SLM vía LangChain (Ollama Text Completion Puro)...")
+
+    print("\n" + "▼"*40)
+    print("DEBUG: PROMPT INYECTADO A OLLAMA")
+    print(prompt_text)
+    print("▲"*40 + "\n")
 
     try:
-        response_msg = chain.invoke(features_dict)
-        raw_output = response_msg.content
+        raw_output = llm.invoke(prompt_text)
         prediction = _parse_model_response(raw_output)
 
         print(f"   ✔ Respuesta cruda del SLM: '{raw_output.strip()}'")

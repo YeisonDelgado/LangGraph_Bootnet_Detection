@@ -1,96 +1,79 @@
-# Sistema Inteligente de Detección de Botnets Edge (LangGraph + Qwen2.5)
+# Framework LangGraph-Qwen2.5 para Detección de Botnets IoT
 
-Este proyecto desarrolla un agente de ciberseguridad impulsado por Inteligencia Artificial "Edge", orquestado mediante **LangGraph**, diseñado específicamente para analizar y clasificar tráfico de protocolos IoT y detectar patrones característicos de botnets (como Mirai y Gafgyt) usando el framework estadístico **N-BaIoT**.
+## 📝 Resumen del Proyecto
 
-El enfoque principal de la tesis es descentralizar el poder de cómputo ubicando pequeñas ventanas de inferencia al "Borde" o "Edge". Para esto, el proyecto incorpora un **Small Language Model (SLM)**, en este caso el modelo local **Qwen2.5 (8-bits)** con Fine-Tuning específico de clasificación a partir de tensores de red en formato vectorial. Se utiliza `langchain-ollama` para hacer bypass de los APIs en la nube limitando el lag y blindando la privacidad de la red local.
+Este proyecto implementa una arquitectura automatizada de ciberseguridad para redes IoT, combinando Inteligencia Artificial Generativa y flujos de trabajo basados en grafos. Específicamente, utilizamos **LangGraph** como motor de orquestación y un modelo Small Language Model (SLM) local finamente ajustado (**Qwen2.5** en formato GGUF) operado a través de **Ollama**. El objetivo es clasificar flujos de tráfico de red y detectar comportamientos anómalos derivados de infecciones por botnets IoT conocidas, como **Mirai** y **Gafgyt**.
 
----
+A diferencia de los modelos de Machine Learning tradicionales (como Random Forest o SVM), aquí el SLM razona directamente sobre métricas numéricas. A través de un escalado idéntico al de su entrenamiento, el framework evalúa el tráfico y detona acciones defensivas simuladas (bloqueos en el firewall o alertamiento en un panel SIEM) de forma autónoma.
 
-## 🎯 ¿Qué Resuelve?
-- **Descentralización y Privacidad:** Al utilizar Qwen2.5 en formato GGUF empaquetado a través de Ollama en local, los logs crudos con información confidencial o IPs de la red nunca se comunican a la nube (ej. OpenAI/Anthropic), preservándose in-house.
-- **Reducción de Latencia:** Evita el cuello de botella que introducen los Tiempos de Ida y Vuelta (Round Trip Time, RTT) en entornos Cloud, crucial cuando de detección de ataques de denegación de servicio distribuido (DDoS) se trata.
-- **Orquestación con GenAI:** Desmitifica la idea de que los LLMs son solo conversacionales, transformándolos en **agentes decisionales** dentro de una pipeline graficada (LangGraph).
+## 🏛️ Diagrama de Arquitectura Actual 
 
----
+```mermaid
+graph TD
+    A[Dataset Dinámico N-BaIoT] -->|Descarga vía Kagglehub| B(Extracción de Muestras)
+    B -->|Muestreo de Normal, Mirai y Gafgyt| C(Data Loader)
 
-## 🛠 Estructura del Proyecto
+    subgraph Data Pipeline
+        C -->|pd.concat 30 vectores| D(Joblib / RobustScaler)
+        D -->|scaler.transform| E[Memoria del Grafo LangGraph: 'network_data']
+    end
 
-```text
-Prueba Entrenamiento LangGraph/
-├── .venv/                         # Entorno virtual con dependencias acopladas
-├── config/                        # Configuraciones, variables y tokens (Drive API)
-├── data/                          # Dataset N-BaIoT, vectores crudos y Dataframes
-│   ├── processed/                 
-│   ├── raw/
-│   └── siem_logs/                 # Salida CEF de eventos por Firewall actions
-├── docs/                          # Tesis o informes relacionados (LaTeX/PDF)
-├── modelos_entrenados/            # SLMs descargados
-│   ├── qwen2.5_botnet.gguf        # Peso del modelo con Fine-Tuning a medida
-│   └── Modelfile                  # Plantilla de inicialización de ChatML
-├── notebooks/                     # Exploración (Fine_Tuned_QLoRa.ipynb, extracciones)
-├── src/                           # Código Fuente 
-│   ├── graph/                     # Core del Sistema
-│   │   ├── nodes.py               # Extractores, Clasificación SLM y Firewall
-│   │   ├── state.py               # Objeto de Estado del Grafo (BotnetState)
-│   │   └── workflow.py            # Orquestador LangGraph Principal
-│   ├── models/                    
-│   │   └── model_loader.py        # Instancia `ChatOllama` y Templates de N-BaIoT
-│   ├── tools/
-│   │   └── firewall_actions.py    # Logs de SIEM local y mitigaciones simuladas SSH
-│   └── utils/
-│       └── drive_uploader.py      # Puente hacia GCP Drive usando oauth-lib 
-├── main.py                        # Entrypoint de prueba y terminal
-├── README.md                      # Esta Documentación
-└── requirements.txt               # Dependencias PIP
+    subgraph LangGraph Orchestrator
+        E -->|BotnetState| F((Nodo 1: Extractor))
+        F --> G((Nodo 2: Inferencia LLM))
+        
+        G -->|14 Features escalados en String Puro| H{{OllamaLLM: Qwen2.5 Local}}
+        H -->|Autocompletado: 'Normal' / 'Mirai'| G
+        
+        G -->|BotnetState actualizado| I((Nodo 3: Orquestador Security / Firewall))
+    end
+
+    subgraph Cyber Responses
+        I -->|Tráfico Malicioso| J[Acción: Bloquear IP]
+        I -->|Todas las simulaciones| K[Acción: Loggear en SIEM]
+    end
 ```
 
----
-
-## ⚙️ Implementación Actual
-
-1. **Inyección Vectorial Simulada (N-BaIoT):** El sistema (`main.py`) empuja actualmente 15 características numéricas infladas y relativas correspondientes a un escenario pasivo-agresivo (TCP SYN / UDP Flood) típico en la huella de **Mirai**.
-2. **Pipelines Node:** LangGraph mapea secuencialmente los 15 floats en un String Template estricto y pasa la orden en background al modelo GGUF utilizando LangChain.
-3. **Validación Output:** El LLM detecta el patron numérico del vector y arroja `Mirai`, instanciando el evento en el estado global.
-4. **Respuesta Automática (Automated Response):** El nodo de orquestación final detecta el input como evento ofensivo, ejecuta el simulacro de IPTables bloqueando la IP y almacena la evidencia bajo formato log-SIEM en `data/siem_logs/events.jsonl`.
-5. **Autosave a Cloud:** Herramientas asíncronas para transferir los Notebooks generadores de la tesis hacia Google Drive para control de versiones utilizando OAuth.
+### Explicación del Flujo
+1. **Pipeline de Datos**: El script selecciona aleatoriamente registros desde los CSV crudos de Kaggle. Antes de que LangGraph analice los datos, el preprocesador utiliza un `RobustScaler` (exportado previamente como archivo `.pkl` del entrenamiento base) e inyecta la normalidad matemática necesaria para las 14 features vectoriales seleccionadas.
+2. **Inyección Cero-Alucinaciones**: En el nodo de inferencia, LangChain entra en juego exclusivamente encapsulando a Ollama a través de `OllamaLLM` (Text Completion Puro). Los 14 datos se formatean en cadenas estáticas con guiones e iteraciones idénticas a las del proceso de *Fine-Tuning* para asegurar una precisión impecable.
+3. **Mecanismos de Reacción**: El tercer nodo del framework de LangGraph usa el dictamen y dependiendo del resultado (si es benigno o malicioso) manda llamar funciones lógicas (tools) que simularían interactuar con las reglas de ingreso perimetral de la red (Mock-Firewall).
 
 ---
 
-## 🚀 Requisitos e Instalación
+## 📂 Organización Modular de los Archivos
 
-### Prerrequisitos
-- **Python 3.10+ o superior**.
-- **Ollama Engine v0.1.3+** previamente instalado para servir los pesos GGUF localmente.
+El repositorio está fuertemente estructurado para separar responsabilidades. En términos generales:
 
-### Instrucciones
+* **evaluate.py**: Es el motor principal del proyecto. Ensambla y ejecuta todo el grafo pasándole datos reales e imprime finalmente los resultados (matriz de confusión y reportes).
+* **main.py**: Constituye una versión primaria/primitiva o de pruebas singulares (basada en valores sintéticos en duro) sin utilizar todo el dataset complejo.
+* **grafica.py**: Herramienta analítica satélite que arroja comparativas entre las calidades y realismos de los datasets de IoT que validan a *N-BaIoT* como referente.
+* **requirements.txt**: Reúne el entorno de dependencias exacto que permite recrear el espacio (Pandas, Scikit-learn, Langchain, etc).
 
-1. **Activa un entorno virtual** estricto:
-```powershell
-py -m venv .venv
-.\.venv\Scripts\activate
-```
+La lógica de negocio se divide en carpetas clave:
 
-2. **Instala las Dependencias Core**:
+* **/data/processed/**: Repositorio gráfico donde se almacenarán las métricas y la Matriz de Confusión en formato `.png` derivado de las conclusiones de `evaluate.py`.
+* **/modelos_entrenados/**: Guarda estrictamente el cerebro del bot. Albergará al modelo `qwen2.5_botnet.gguf`, el archivo de pesos `robust_scaler.pkl` exportado para el escalamiento y el `Modelfile`. *El Modelfile* gobierna en tiempo real sobre cómo Ollama enmarca el prompt interno (instruyendo que siempre finalice con `Trafico: ` garantizando la reacción inmediata del modelo).
+* **/src/utils/**: Esconde el pipeline ETL (`data_loader.py`) que usa una lista filtrada de las 14 variables de red más reveladoras tras la optimización matemática para aplicar el `transformer`.
+* **/src/models/**: Ubicación del script de interconexión API local (`model_loader.py`) quien crea y establece las variables para invocar al Qwen2.5 por la IP en el puerto 11434.
+* **/src/graph/**: El lugar donde ocurre la magia transitoria. En `state.py` definimos el diccionario (la memoria) que fluye entre cada paso, en `workflow.py` construimos el compilado lineal general, y en `nodes.py` declaramos las lógicas aisladas que se alimentarán entre sí secuencialmente. 
+* **/src/tools/**: El cajón de herramientas lógicas ejecutables (`firewall_actions.py`) que imitan de manera visual/textual una integración real SOC/Gobernanza hacia las interfaces defensivas perimetrales.
+
+---
+
+## 🚀 Requisitos y Ejecución 
+
+Asegúrese de cargar las librerías base necesarias primero:
 ```powershell
 pip install -r requirements.txt
 ```
 
-3. **Carga el Modelo GGUF con Ollama**:
-Debes tener el binario local del fine-tuning `qwen2.5_botnet.gguf` metido en la carperta `/modelos_entrenados/` y entonces armar la imagen OCI del modelo con su Modelfile respectivo:
+Al existir modificaciones arquitectónicas importantes o la descarga reciente de su `.gguf` asegure que su contenedor virtual de Ollama absorba la nueva regla (Modelfile) ejecutando desde `/modelos_entrenados/`:
 ```powershell
-ollama create qwen2.5_botnet -f modelos_entrenados/Modelfile
+ollama create qwen2.5_botnet -f Modelfile
 ```
-*Si tienes la terminal activa, no olvides ejecutar `ollama serve` de fondo si el servicio no corre automáticamente.*
 
-4. **Ejecuta la Inferencia:**
+Posteriormente, con la orquestación y el scaler debidamente ubicados, dispare desde su raíz base el archivo evaluativo:
 ```powershell
-python main.py
+python evaluate.py
 ```
-> En tu terminal visualizarás el paso del vector, el análisis del LLM de manera oculta y el resultado del Firewall.
-
----
-
-## ⚠️ Lo que vas a Encontrar
-- Todas las inyecciones generativas actualmente se rinden sobre el LLM parametrizando la temperatura estáticamente a `T=0.1`. Esto garantiza **Altísimo Determinismo** logrando consistencia para no perturbar ni alucinar la clasificación. 
-- La arquitectura está pensada explícitamente sobre LangGraph para integraciones de Replicación Local (Loci y Threads). Si planeas guardar métricas (Checkpointing a SqLite/Postgres) simplemente basta modificar el Graph Compiler de LangGraph. 
-

@@ -12,7 +12,7 @@ TEMPLATE """<|im_start|>system
 <|im_start|>user
 {{ .Prompt }}<|im_end|>
 <|im_start|>assistant
-"""
+Trafico: """
 
 # Contexto de sistema
 SYSTEM """Eres un oráculo de ciberseguridad entrenado con el dataset N-BaIoT para predecir anomalías en protocolos IoT. Responde ESTRICTAMENTE con "Normal", "Mirai" o "Gafgyt". No justifiques tu respuesta."""
